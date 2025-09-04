@@ -130,15 +130,100 @@ def load_dataset():
     return dataset
 
 
+def class_to_label(class_name: str):
+    class_map = {
+        "aeroplane": 0,
+        "bicycle": 1,
+        "bird": 2,
+        "boat": 3,
+        "bottle": 4,
+        "bus": 5,
+        "car": 6,
+        "cat": 7,
+        "chair": 8,
+        "cow": 9,
+        "diningtable": 10,
+        "dog": 11,
+        "horse": 12,
+        "motorbike": 13,
+        "person": 14,
+        "pottedplant": 15,
+        "sheep": 16,
+        "sofa": 17,
+        "train": 18,
+        "tvmonitor": 19,
+    }
+
+    return class_map.get(class_name, 20)
+
+
+def label_to_class(label: int):
+    label_map = {
+        0: "aeroplane",
+        1: "bicycle",
+        2: "bird",
+        3: "boat",
+        4: "bottle",
+        5: "bus",
+        6: "car",
+        7: "cat",
+        8: "chair",
+        9: "cow",
+        10: "diningtable",
+        11: "dog",
+        12: "horse",
+        13: "motorbike",
+        14: "person",
+        15: "pottedplant",
+        16: "sheep",
+        17: "sofa",
+        18: "train",
+        19: "tvmonitor",
+    }
+
+    return label_map.get(label)
+
+
+def voc_to_yolo(target: dict):
+    labels = []
+
+    annotation = target["annotation"]
+
+    image_width = float(annotation["size"]["width"])
+    image_height = float(annotation["size"]["height"])
+
+    objects = annotation["object"]
+    for o in objects:
+        name = o["name"]
+        label = class_to_label(name)
+
+        xmin = float(o["bndbox"]["xmin"])
+        ymin = float(o["bndbox"]["ymin"])
+        xmax = float(o["bndbox"]["xmax"])
+        ymax = float(o["bndbox"]["ymax"])
+
+        x_center = (xmin + (xmax - xmin) / 2) / image_width
+        y_center = (ymin + (ymax - ymin) / 2) / image_height
+        box_width = (xmax - xmin) / image_width
+        box_height = (ymax - ymin) / image_height
+
+        labels.append([label, x_center, y_center, box_width, box_height])
+
+    return labels
+
+
 def main():
     dataset = load_dataset()
-    img, target = dataset[0]
-    print(img.shape)
-    print(target)
+    image, target = dataset[0]
+    print(image.shape)
+
+    labels = voc_to_yolo(target)
+    print(labels)
 
     model = YOLOv1(grid_size=7, bbox_per_cell=2, num_classes=20)
-    out = model(img)
+    out = model(image)
     print(out.shape)
 
 
-main()
+if __name__ == "__main__":
+    main()
