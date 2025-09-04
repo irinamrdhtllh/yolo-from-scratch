@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 
+import torchvision
+import torchvision.transforms as T
+
 
 class YOLOv1(nn.Module):
     """The first YOLO architecture proposed in the paper titled
@@ -97,11 +100,10 @@ class YOLOv1(nn.Module):
         x = self.layer4(x)
         x = self.layer5(x)
         x = self.layer6(x)
-        x = x.view(x.size(0), -1)
+        x = x.view(-1)
         x = self.layer7(x)
         x = self.layer8(x)
         x = x.view(
-            -1,
             self.grid_size,
             self.grid_size,
             (self.bbox_per_cell * 5 + self.num_classes),
@@ -110,10 +112,32 @@ class YOLOv1(nn.Module):
         return x
 
 
+def load_dataset():
+    transform = T.Compose(
+        [
+            T.Resize((448, 448)),
+            T.ToTensor(),
+        ]
+    )
+
+    dataset = torchvision.datasets.VOCDetection(
+        root="data",
+        year="2007",
+        image_set="trainval",
+        transform=transform,
+    )
+
+    return dataset
+
+
 def main():
-    input = torch.rand((1, 3, 448, 448))
+    dataset = load_dataset()
+    img, target = dataset[0]
+    print(img.shape)
+    print(target)
+
     model = YOLOv1(grid_size=7, bbox_per_cell=2, num_classes=20)
-    out = model(input)
+    out = model(img)
     print(out.shape)
 
 
