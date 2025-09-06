@@ -1,4 +1,5 @@
 import torch
+from torch.utils.data import DataLoader
 
 import dataset
 import models
@@ -61,34 +62,50 @@ def calculate_loss(
     return total_loss
 
 
+def train(model, data, num_epochs, lr, device):
+    model.to(device)
+    optimizer = torch.optim.SGD(
+        model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4
+    )
+
+    for epoch in range(num_epochs):
+        total_loss = 0
+        for i in range(len(data)):
+            image, target = data[i]
+
+            target = dataset.voc_to_yolo(target)
+            encoded_target = dataset.encode_target(
+                target, grid_size=7, bbox_per_cell=2, num_classes=20
+            )
+
+            image = image.to(device)
+            encoded_target = encoded_target.to(device)
+
+            pred = model(image)
+
+            loss = calculate_loss(
+                pred,
+                encoded_target,
+                grid_size=7,
+                bbox_per_cell=2,
+                num_classes=20,
+                lambda_coord=5,
+                lambda_noobj=0.5,
+            )
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            total_loss += loss.item()
+
+        print(f"Epoch: {epoch + 1}/{num_epochs}, Loss: {total_loss/len(data):.4f}")
+
+
 def main():
-    data = dataset.load_dataset()
-    image, target = data[0]
-    print(target)
-    print(image.shape)
-
-    target = dataset.voc_to_yolo(target)
-    print(target)
-
-    encoded_target = dataset.encode_target(
-        target, grid_size=7, bbox_per_cell=2, num_classes=20
-    )
-    print(encoded_target.shape)
-
     model = models.YOLOv1(grid_size=7, bbox_per_cell=2, num_classes=20)
-    out = model(image)
-    print(out.shape)
-
-    loss = calculate_loss(
-        out,
-        encoded_target,
-        grid_size=7,
-        bbox_per_cell=2,
-        num_classes=20,
-        lambda_coord=5,
-        lambda_noobj=0.5,
-    )
-    print(loss)
+    data = dataset.load_dataset()
+    train(model, data, num_epochs=10, lr=0.001, device="cuda")
 
 
 if __name__ == "__main__":
