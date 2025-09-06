@@ -47,14 +47,21 @@ def load_dataset():
         ]
     )
 
-    dataset = torchvision.datasets.VOCDetection(
+    raw_dataset = torchvision.datasets.VOCDetection(
         root="data",
         year="2007",
         image_set="trainval",
         transform=transform,
     )
 
-    return dataset
+    encoded_dataset = []
+    for i in range(len(raw_dataset)):
+        image, target = raw_dataset[i]
+        target = voc_to_yolo(target)
+        target = encode_target(target, grid_size=7, bbox_per_cell=2, num_classes=20)
+        encoded_dataset.append((image, target))
+
+    return encoded_dataset
 
 
 def voc_to_yolo(target: dict):
