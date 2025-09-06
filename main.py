@@ -1,3 +1,5 @@
+import os
+
 import torch
 from torch.utils.data import DataLoader
 
@@ -99,12 +101,25 @@ def train(model, data, num_epochs, lr, device):
 
             total_loss += loss.item()
 
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "loss": total_loss,
+            },
+            f"checkpoints/yolov1_epoch_{epoch + 1}.pth",
+        )
+
         print(f"Epoch: {epoch + 1}/{num_epochs}, Loss: {total_loss/len(data):.4f}")
 
 
 def main():
+    os.makedirs("checkpoints", exist_ok=True)
+
     model = models.YOLOv1(grid_size=7, bbox_per_cell=2, num_classes=20)
     data = dataset.load_dataset()
+
     train(model, data, num_epochs=10, lr=0.001, device="cuda")
 
 
