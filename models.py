@@ -97,10 +97,11 @@ class YOLOv1(nn.Module):
         x = self.layer4(x)
         x = self.layer5(x)
         x = self.layer6(x)
-        x = x.view(-1)
+        x = x.view(x.size(0), -1)
         x = self.layer7(x)
         x = self.layer8(x)
         x = x.view(
+            -1,
             self.grid_size,
             self.grid_size,
             (self.bbox_per_cell * 5 + self.num_classes),
