@@ -18,49 +18,48 @@ def calculate_loss(
 ):
     batch_size = pred.shape[0]
 
-    bbox_coord_loss = 0
-    bbox_size_loss = 0
-    confidence_loss = 0
-    confidence_noobj_loss = 0
-    class_loss = 0
+    target_bbox = target[:, :, :, 0 : bbox_per_cell * 5]
+    target_bbox = target_bbox.reshape(
+        batch_size, grid_size, grid_size, bbox_per_cell, 5
+    )
 
-    for n in range(batch_size):
-        for i in range(grid_size):
-            for j in range(grid_size):
-                for b in range(bbox_per_cell):
-                    target_obj_prob = target[n, i, j, b * 5]
-                    target_x_center = target[n, i, j, b * 5 + 1]
-                    target_y_center = target[n, i, j, b * 5 + 2]
-                    target_width = target[n, i, j, b * 5 + 3]
-                    target_height = target[n, i, j, b * 5 + 4]
+    pred_bbox = pred[:, :, :, 0 : bbox_per_cell * 5]
+    pred_bbox = pred_bbox.reshape(batch_size, grid_size, grid_size, bbox_per_cell, 5)
 
-                    pred_obj_prob = pred[n, i, j, b * 5]
-                    pred_x_center = pred[n, i, j, b * 5 + 1]
-                    pred_y_center = pred[n, i, j, b * 5 + 2]
-                    pred_width = pred[n, i, j, b * 5 + 3]
-                    pred_height = pred[n, i, j, b * 5 + 4]
+    target_prob = target_bbox[:, :, :, :, 0]
+    target_coord = target_bbox[:, :, :, :, 1:3]
+    target_size = target_bbox[:, :, :, :, 3:5]
 
-                    if target_obj_prob > 0:
-                        # fmt: off
-                        bbox_coord_loss += ((target_x_center - pred_x_center) ** 2 
-                                            + (target_y_center - pred_y_center) ** 2)
-                        bbox_size_loss += ((torch.sqrt(torch.abs(target_width)) - torch.sqrt(torch.abs(pred_width))) ** 2 
-                                        + (torch.sqrt(torch.abs(target_height)) - torch.sqrt(torch.abs(pred_height))) ** 2)
-                        confidence_loss += (target_obj_prob - pred_obj_prob) ** 2
-                        # fmt: on
+    pred_prob = pred_bbox[:, :, :, :, 0]
+    pred_coord = pred_bbox[:, :, :, :, 1:3]
+    pred_size = pred_bbox[:, :, :, :, 3:5]
 
-                        for c in range(num_classes):
-                            target_class = target[n, i, j, bbox_per_cell * 5 + c]
-                            pred_class = pred[n, i, j, bbox_per_cell * 5 + c]
-                            class_loss += (target_class - pred_class) ** 2
-                    else:
-                        confidence_noobj_loss += (target_obj_prob - pred_obj_prob) ** 2
+    bbox_coord_loss = lambda_coord * torch.sum(
+        target_prob.unsqueeze(-1) * (target_coord - pred_coord) ** 2
+    )
+    bbox_size_loss = lambda_coord * torch.sum(
+        target_prob.unsqueeze(-1)
+        * (torch.sqrt(target_size) - torch.sqrt(torch.clamp(pred_size, min=1e-6))) ** 2
+    )
+    confidence_loss = torch.sum(target_prob * (target_prob - pred_prob) ** 2)
+    confidence_noobj_loss = lambda_noobj * torch.sum(
+        (1 - target_prob) * (target_prob - pred_prob) ** 2
+    )
+
+    target_prob = (
+        target_prob.unsqueeze(-1)
+        .expand(-1, -1, -1, -1, 10)
+        .reshape(batch_size, grid_size, grid_size, num_classes)
+    )
+    target_class = target[:, :, :, bbox_per_cell * 5 :]
+    pred_class = pred[:, :, :, bbox_per_cell * 5 :]
+    class_loss = torch.sum(target_prob * (target_class - pred_class) ** 2)
 
     total_loss = (
-        lambda_coord * bbox_coord_loss
-        + lambda_coord * bbox_size_loss
+        bbox_coord_loss
+        + bbox_size_loss
         + confidence_loss
-        + lambda_noobj * confidence_noobj_loss
+        + confidence_noobj_loss
         + class_loss
     ) / batch_size
 
@@ -114,12 +113,19 @@ def train(model, data, num_epochs, batch_size, lr, device):
         )
 
 
+def validate(model, data, device): ...
+
+
 def main():
+    torch.autograd.set_detect_anomaly(True)
     os.makedirs("checkpoints", exist_ok=True)
 
     model = models.YOLOv1(grid_size=7, bbox_per_cell=2, num_classes=20)
+
+    print("Loading the dataset.")
     data = dataset.load_dataset()
 
+    print("Starting training.")
     train(model, data, num_epochs=10, batch_size=2, lr=0.001, device="cuda")
 
 
